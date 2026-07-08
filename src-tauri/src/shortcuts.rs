@@ -251,12 +251,6 @@ fn handle_toggle_window<R: Runtime>(app: &AppHandle<R>) {
         if let Err(e) = window.emit("toggle-window-visibility", *is_hidden) {
             eprintln!("Failed to emit toggle-window-visibility event: {}", e);
         }
-
-        if !*is_hidden {
-            if let Err(e) = window.emit("focus-text-input", json!({})) {
-                eprintln!("Failed to emit focus-text-input event: {}", e);
-            }
-        }
         return;
     }
 
@@ -587,7 +581,7 @@ pub fn set_app_icon_visibility<R: Runtime>(app: AppHandle<R>, visible: bool) -> 
             // hidden window would be forced back on screen.
             if window.is_visible().unwrap_or(false) {
                 let _ = window.hide();
-                let _ = window.show();
+                let _ = show_main_window_without_focus(&window);
             }
         } else {
             eprintln!("Main window not found on Windows");
@@ -677,11 +671,20 @@ fn handle_focus_input<R: Runtime>(app: &AppHandle<R>) {
             }
         }
 
-        // On Windows the overlay stays non-focusable so it never steals OS
-        // focus; the frontend still focuses the input box via the event below.
+        // On Windows the overlay is non-focusable by default (WS_EX_NOACTIVATE)
+        // so showing/toggling never steals OS focus from a fullscreen app.
+        // When the user explicitly requests input focus (this handler), we
+        // temporarily make the window focusable so keyboard input reaches the
+        // WebView. This will cause the fullscreen app to lose focus, but the
+        // user has deliberately chosen to type.
         #[cfg(target_os = "windows")]
         {
-            ensure_main_window_non_focusable(&window);
+            if let Err(e) = window.set_focusable(true) {
+                eprintln!("Failed to make window focusable: {}", e);
+            }
+            if let Err(e) = window.set_focus() {
+                eprintln!("Failed to focus window for input: {}", e);
+            }
         }
         #[cfg(not(target_os = "windows"))]
         {
