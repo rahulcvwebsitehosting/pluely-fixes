@@ -3,6 +3,7 @@ mod activate;
 mod api;
 mod capture;
 mod db;
+mod oauth;
 mod shortcuts;
 mod window;
 use std::sync::{Arc, Mutex};
@@ -47,6 +48,9 @@ pub fn run() {
         .manage(shortcuts::RegisteredShortcuts::default())
         .manage(shortcuts::LicenseState::default())
         .manage(shortcuts::MoveWindowState::default())
+        .manage(oauth::OAuthFlowState::default())
+        #[cfg(target_os = "macos")]
+        .manage(shortcuts::ShortcutKeepalive::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_http::init())
@@ -89,6 +93,11 @@ pub fn run() {
             shortcuts::set_app_icon_visibility,
             shortcuts::set_always_on_top,
             shortcuts::exit_app,
+            oauth::start_openai_oauth,
+            oauth::poll_openai_oauth,
+            oauth::get_openai_oauth_token,
+            oauth::cancel_openai_oauth,
+            oauth::refresh_openai_token,
             activate::activate_license_api,
             activate::deactivate_license_api,
             activate::validate_license_api,

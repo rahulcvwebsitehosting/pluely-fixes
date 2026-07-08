@@ -1,7 +1,8 @@
 import { Button, Header, Input, Selection, TextInput } from "@/components";
 import { UseSettingsReturn } from "@/types";
 import curl2Json, { ResultJSON } from "@bany/curl-to-json";
-import { KeyIcon, TrashIcon } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { KeyIcon, LogInIcon, TrashIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export const Providers = ({
@@ -170,6 +171,60 @@ export const Providers = ({
               )}
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {(selectedAIProvider?.provider === "openai" ||
+        selectedAIProvider?.provider === "openai-responses") &&
+      isApiKeyEmpty() ? (
+        <div className="space-y-2">
+          <Header
+            title="Sign in with OpenAI"
+            description="Use OAuth to authenticate instead of entering an API key manually."
+          />
+          <Button
+            onClick={async () => {
+              try {
+                const authUrl = await invoke<string>("start_openai_oauth");
+                const urlObj = new URL(authUrl);
+                const state = urlObj.searchParams.get("state") || "";
+
+                window.open(authUrl, "_blank");
+
+                // Poll for completion
+                const poll = async (): Promise<void> => {
+                  const result = await invoke<{
+                    access_token: string;
+                  } | null>("poll_openai_oauth", { state });
+                  if (result?.access_token) {
+                    const apiKeyVar = variables.find(
+                      (v) => v.key === "api_key"
+                    );
+                    if (apiKeyVar && selectedAIProvider) {
+                      onSetSelectedAIProvider({
+                        ...selectedAIProvider,
+                        variables: {
+                          ...selectedAIProvider.variables,
+                          [apiKeyVar.key]: result.access_token,
+                        },
+                      });
+                    }
+                  } else {
+                    await new Promise((r) => setTimeout(r, 2000));
+                    return poll();
+                  }
+                };
+
+                await poll();
+              } catch (error) {
+                console.error("OAuth failed:", error);
+              }
+            }}
+            className="w-full h-11"
+          >
+            <LogInIcon className="h-4 w-4 mr-2" />
+            Connect with OpenAI
+          </Button>
         </div>
       ) : null}
 

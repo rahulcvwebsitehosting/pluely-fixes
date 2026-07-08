@@ -10,10 +10,12 @@ use tokio::time::{sleep, Duration};
 #[cfg(target_os = "macos")]
 use tauri_nspanel::ManagerExt;
 
-use crate::window::show_dashboard_window;
+    use crate::window::show_dashboard_window;
 // State for window visibility
 #[cfg(target_os = "windows")]
 use crate::window::{ensure_main_window_non_focusable, show_main_window_without_focus};
+#[cfg(target_os = "macos")]
+use tokio::time::interval;
 
 #[inline]
 fn should_focus_overlay_window() -> bool {
@@ -90,6 +92,20 @@ pub(crate) type MoveWindowTask = Arc<AtomicBool>;
 
 pub(crate) struct MoveWindowState {
     tasks: Mutex<HashMap<String, MoveWindowTask>>,
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) struct ShortcutKeepalive {
+    pub started: AtomicBool,
+}
+
+#[cfg(target_os = "macos")]
+impl Default for ShortcutKeepalive {
+    fn default() -> Self {
+        Self {
+            started: AtomicBool::new(false),
+        }
+    }
 }
 
 impl Default for MoveWindowState {
@@ -477,6 +493,12 @@ pub fn update_shortcuts<R: Runtime>(
         ));
     }
 
+    // macOS silently disables the CGEventTap after ~30 minutes of inactivity,
+    // causing global shortcuts to stop working. Start a periodic re-registration
+    // keepalive to keep the event tap alive.
+    #[cfg(target_os = "macos")]
+    spawn_shortcut_keepalive(app.clone());
+
     Ok(())
 }
 
@@ -693,6 +715,54 @@ fn handle_focus_input<R: Runtime>(app: &AppHandle<R>) {
 
         let _ = window.emit("focus-text-input", json!({}));
     }
+}
+
+/// macOS CGEventTap keepalive — the system silently disables the global event
+/// tap after ~30 minutes of inactivity, causing all keyboard shortcuts to stop
+/// working. Periodically re-registering the shortcuts resets the tap's idle
+/// timer and keeps shortcuts functional indefinitely.
+#[cfg(target_os = "macos")]
+fn spawn_shortcut_keepalive<R: Runtime>(app: AppHandle<R>) {
+    let keepalive_state = app.state::<ShortcutKeepalive>();
+    if keepalive_state
+        .started
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return; // already running
+    }
+
+    tauri::async_runtime::spawn(async move {
+        let mut ticker = interval(Duration::from_secs(20 * 60));
+        loop {
+            ticker.tick().await;
+            let state = app.state::<RegisteredShortcuts>();
+            let registered = match state.shortcuts.lock() {
+                Ok(guard) => guard.clone(),
+                Err(poisoned) => poisoned.into_inner().clone(),
+            };
+            if registered.is_empty() {
+                continue;
+            }
+
+            // Unregister all, then re-register — this resets the macOS event tap idle timer
+            for (_, shortcut_str) in &registered {
+                if let Ok(shortcut) = shortcut_str.parse::<Shortcut>() {
+                    let _ = app.global_shortcut().unregister(shortcut);
+                }
+            }
+            for (action_id, shortcut_str) in &registered {
+                if let Ok(shortcut) = shortcut_str.parse::<Shortcut>() {
+                    if let Err(e) = app.global_shortcut().register(shortcut) {
+                        eprintln!(
+                            "[keepalive] Failed to re-register {}: {}",
+                            action_id, e
+                        );
+                    }
+                }
+            }
+        }
+    });
 }
 
 #[cfg(test)]
