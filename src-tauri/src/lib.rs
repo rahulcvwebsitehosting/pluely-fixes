@@ -231,6 +231,28 @@ fn init(app_handle: &AppHandle) {
 
     let panel = window.to_panel().unwrap();
 
+    // ── Native NSPanel hardening —────────────────────────────────────
+    // Prevents the panel from becoming the key/active window on
+    // macOS Tahoe (Sequoia) and later, which changed the default
+    // panel activation behaviour.
+    //
+    //   setFloatingPanel(YES)        —  never becomes key on click
+    //   setHidesOnDeactivate(NO)     —  stays visible when switching
+    //                                   to another app
+    //   setWorksWhenModal(YES)       —  remains functional above
+    //                                   modal dialogs
+    {
+        use tauri_nspanel::objc::msg_send;
+        use tauri_nspanel::objc::runtime::{Object, NO, YES};
+
+        let native: *mut Object = panel.0 as *mut Object;
+        unsafe {
+            let _: () = msg_send![native, setFloatingPanel: YES];
+            let _: () = msg_send![native, setHidesOnDeactivate: NO];
+            let _: () = msg_send![native, setWorksWhenModal: YES];
+        }
+    }
+
     let delegate = panel_delegate!(MyPanelDelegate {
         window_did_become_key,
         window_did_resign_key

@@ -47,16 +47,69 @@ pub fn ensure_main_window_non_focusable<R: Runtime>(window: &WebviewWindow<R>) {
 pub fn ensure_main_window_non_focusable<R: Runtime>(_window: &WebviewWindow<R>) {}
 
 /// Shows the main overlay without requesting OS focus.
+///
+/// On Windows this uses `ShowWindow(SW_SHOWNOACTIVATE)` instead of Tauri's
+/// `window.show()` (which calls `SW_SHOW` and **always** activates the
+/// window regardless of `WS_EX_NOACTIVATE`).  Combined with
+/// `set_focusable(false)` this prevents focus steal on show, mouse click,
+/// and keyboard input.
 pub fn show_main_window_without_focus<R: Runtime>(
     window: &WebviewWindow<R>,
 ) -> Result<(), String> {
     ensure_main_window_non_focusable(window);
+
+    #[cfg(target_os = "windows")]
+    show_window_no_activate(window)?;
+    #[cfg(not(target_os = "windows"))]
     window
         .show()
         .map_err(|e| format!("Failed to show window: {}", e))?;
+
     ensure_main_window_non_focusable(window);
 
     Ok(())
+}
+
+/// Windows-only: shows the window via `ShowWindow(SW_SHOWNOACTIVATE)` so the
+/// overlay never steals focus from the currently active application.
+///
+/// Tauri's built-in `window.show()` → `ShowWindow(SW_SHOW)` always activates
+/// the window regardless of the `WS_EX_NOACTIVATE` extended style, causing
+/// the previously active application to receive a `WM_ACTIVATE` / blur event.
+/// This is the root cause of ##131 and the stealth-mode focus-leak bug.
+#[cfg(target_os = "windows")]
+fn show_window_no_activate<R: Runtime>(window: &WebviewWindow<R>) -> Result<(), String> {
+    use std::ffi::c_void;
+    use tauri::raw_window_handle::HasRawWindowHandle;
+
+    match window.raw_window_handle() {
+        Ok(raw) => {
+            if let tauri::raw_window_handle::RawWindowHandle::Win32(win) = raw {
+                let hwnd = win.hwnd.as_ptr() as *mut c_void;
+
+                extern "system" {
+                    fn ShowWindow(hWnd: *mut c_void, nCmdShow: i32) -> i32;
+                }
+                // SW_SHOWNOACTIVATE = 8 — shows the window but does not
+                // activate it; the previously foreground window stays active.
+                const SW_SHOWNA: i32 = 8;
+                unsafe { ShowWindow(hwnd, SW_SHOWNA); }
+
+                return Ok(());
+            }
+        }
+        Err(e) => {
+            eprintln!(
+                "Failed to get raw window handle, falling back to Tauri show(): {:?}",
+                e
+            );
+        }
+    }
+
+    // Fallback: Tauri's normal show (will briefly activate, but better than nothing)
+    window
+        .show()
+        .map_err(|e| format!("Failed to show window: {}", e))
 }
 
 /// Positions a window at the top center of the screen with a specified Y offset
