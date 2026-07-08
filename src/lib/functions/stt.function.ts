@@ -101,7 +101,11 @@ export async function fetchSTT(params: STTParams): Promise<string> {
 
     // To Check if API accepts Binary Data
     const isBinaryUpload = provider.curl.includes("--data-binary");
-    // Fetch URL Params
+    // Fetch URL Params — strip any baked-in query string from the replaced
+    // URL first so we never double-append keys (curl2Json may or may not
+    // extract `?key={{API_KEY}}` into `.params`, but `.url` may still
+    // retain the query portion).
+    url = url.split("?")[0];
     const rawParams = curlJson.params || {};
     // Decode Them
     const decodedParams = Object.fromEntries(
@@ -180,9 +184,9 @@ export async function fetchSTT(params: STTParams): Promise<string> {
       });
     } else {
       // Google-style: JSON payload with base64
-      allVariables.AUDIO = await blobToBase64(audio);
+      const vars = { ...allVariables, AUDIO: await blobToBase64(audio) };
       const dataObj = curlJson.data ? { ...curlJson.data } : {};
-      body = JSON.stringify(deepVariableReplacer(dataObj, allVariables));
+      body = JSON.stringify(deepVariableReplacer(dataObj, vars));
     }
 
     // Use Tauri's HTTP plugin fetch for external http(s) calls to bypass CORS

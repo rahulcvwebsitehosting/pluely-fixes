@@ -111,6 +111,18 @@ export function useSystemAudio() {
   const isSavingRef = useRef<boolean>(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
+  // Ref-sync for values read inside the long-lived `speech-detected` listener
+  // but not in the useEffect dependency array — avoids re-registering the
+  // expensive Tauri `listen` on every state change while keeping values fresh.
+  const processWithAIRef = useRef(processWithAI);
+  const systemPromptRef = useRef(systemPrompt);
+  const contextContentRef = useRef(contextContent);
+  const useSystemPromptRef = useRef(useSystemPrompt);
+  processWithAIRef.current = processWithAI;
+  systemPromptRef.current = systemPrompt;
+  contextContentRef.current = contextContent;
+  useSystemPromptRef.current = useSystemPrompt;
+
   // Load context settings and VAD config from localStorage on mount
   useEffect(() => {
     const savedContext = safeLocalStorage.getItem(
@@ -280,15 +292,15 @@ export function useSystemAudio() {
                 setLastTranscription(cleaned);
                 setError("");
 
-                const effectiveSystemPrompt = useSystemPrompt
-                  ? systemPrompt || DEFAULT_SYSTEM_PROMPT
-                  : contextContent || DEFAULT_SYSTEM_PROMPT;
+                const effectiveSystemPrompt = useSystemPromptRef.current
+                  ? systemPromptRef.current || DEFAULT_SYSTEM_PROMPT
+                  : contextContentRef.current || DEFAULT_SYSTEM_PROMPT;
 
                 const previousMessages = conversation.messages.map((msg) => {
                   return { role: msg.role, content: msg.content };
                 });
 
-                await processWithAI(
+                await processWithAIRef.current(
                   cleaned,
                   effectiveSystemPrompt,
                   previousMessages

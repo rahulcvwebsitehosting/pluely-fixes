@@ -184,7 +184,12 @@ pub fn set_window_size(
 pub fn set_window_height(window: tauri::WebviewWindow, height: u32) -> Result<(), String> {
     use tauri::{LogicalSize, Size};
 
-    let new_size = LogicalSize::new(800.0, height as f64);
+    // Preserve the user's current width when only changing height (avoids
+    // resetting width to 800 px if the user manually resized the window).
+    let current = window
+        .outer_size()
+        .map_err(|e| format!("Failed to get window size: {}", e))?;
+    let new_size = LogicalSize::new(current.width as f64, height as f64);
     window
         .set_size(Size::Logical(new_size))
         .map_err(|e| format!("Failed to resize window: {}", e))?;
@@ -371,6 +376,7 @@ pub fn set_app_icon_path(app: tauri::AppHandle, path: String) -> Result<(), Stri
     {
         use tauri_nspanel::objc::{class, msg_send};
         use tauri_nspanel::objc::runtime::Object;
+        use std::ffi::CString;
 
         let shared_app: *mut Object = unsafe { msg_send![class!(NSApplication), sharedApplication] };
 
@@ -379,8 +385,9 @@ pub fn set_app_icon_path(app: tauri::AppHandle, path: String) -> Result<(), Stri
             return Ok(());
         }
 
+        let cstr = CString::new(path.as_str()).map_err(|e| format!("Invalid path: {}", e))?;
         let ns_str: *mut Object = unsafe {
-            msg_send![class!(NSString), stringWithUTF8String: path.as_ptr() as *const i8]
+            msg_send![class!(NSString), stringWithUTF8String: cstr.as_ptr()]
         };
         let data: *mut Object = unsafe { msg_send![class!(NSData), dataWithContentsOfFile: ns_str] };
         if data.is_null() {
@@ -406,7 +413,7 @@ pub fn set_app_icon_path(app: tauri::AppHandle, path: String) -> Result<(), Stri
         extern "system" {
             fn LoadImageA(
                 hInst: *mut std::ffi::c_void,
-                name: *const u8,
+                name: *const i8,
                 typ: u32,
                 cx: i32,
                 cy: i32,
