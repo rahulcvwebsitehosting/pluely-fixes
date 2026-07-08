@@ -126,8 +126,11 @@ pub fn run() {
             speaker::get_output_devices,
         ])
         .setup(|app| {
-            // Setup main window positioning
-            window::setup_main_window(app).expect("Failed to setup main window");
+            // Setup main window positioning — non-fatal: if the window label
+            // mismatch or positioning fails the app can still function.
+            if let Err(e) = window::setup_main_window(app) {
+                eprintln!("[pluely] Failed to setup main window: {}", e);
+            }
             #[cfg(target_os = "macos")]
             init(app.app_handle());
             let app_handle = app.handle();
@@ -200,8 +203,10 @@ pub fn run() {
                             }
                         })
                         .build(),
-                )
-                .expect("Failed to initialize global shortcut plugin");
+                ) {
+                    Err(e) => eprintln!("[pluely] Failed to initialize global shortcut plugin: {}", e),
+                    _ => {}
+                }
             if let Err(e) = shortcuts::setup_global_shortcuts(app.handle()) {
                 eprintln!("Failed to setup global shortcuts: {}", e);
             }
