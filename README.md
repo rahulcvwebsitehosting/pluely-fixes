@@ -247,7 +247,20 @@ This fork focuses on **bug fixes and stability improvements** for the original P
 
 <div align="center">
 
-**Maintained by [Rahul Shyam](https://github.com/rahulcvwebsitehosting)** — bug-fix fork of the original Pluely project.
+## Maintainer
+
+**Rahul S** · _Engineering-Focused Builder_
+
+Civil engineering student who codes. I build AI apps, browser tools, games, and construction software — 40+ projects live. I don't just build websites, I engineer solutions.
+
+[![Portfolio](https://img.shields.io/badge/Portfolio-rahulshyam--portfolio.vercel.app-000000?style=flat&logo=vercel)](https://rahulshyam-portfolio.vercel.app/)
+[![GitHub](https://img.shields.io/badge/GitHub-@rahulcvwebsitehosting-181717?style=flat&logo=github)](https://github.com/rahulcvwebsitehosting)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-rahulshyamcivil-0A66C2?style=flat&logo=linkedin)](https://in.linkedin.com/in/rahulshyamcivil)
+[![X](https://img.shields.io/badge/X-@RahulShyamCV-000000?style=flat&logo=x)](https://x.com/RahulShyamCV)
+
+</div>
+
+_Bug-fix fork of the original Pluely project. Maintained independently — fixes, improvements, and issues handled here._
 
 [Report a Bug](https://github.com/rahulcvwebsitehosting/pluely-fixes/issues) · [View Source](https://github.com/rahulcvwebsitehosting/pluely-fixes)
 
