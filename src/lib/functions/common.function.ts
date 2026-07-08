@@ -245,16 +245,16 @@ const DEFAULT_FILLER_WORDS = [
   "so yeah", "yeah", "okay", "alright", "well",
 ];
 
-const FILLER_RE = new RegExp(
-  `(?:^|\\s)(?:${DEFAULT_FILLER_WORDS.map((w) =>
-    w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  ).join("|")})(?=\\s|$|\\.|,|\\?|!|;|:)`,
-  "gi"
-);
-
 /** Strips common filler words from a transcription string. */
 export function filterTranscription(text: string): string {
-  let filtered = text.replace(FILLER_RE, "").trim();
+  const fillerRe = new RegExp(
+    `(?:^|\\s)(?:${DEFAULT_FILLER_WORDS.map((w) =>
+      w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    ).join("|")})(?=\\s|$|\\.|,|\\?|!|;|:)`,
+    "gi"
+  );
+
+  let filtered = text.replace(fillerRe, "").trim();
   // Collapse repeated whitespace left behind after removals.
   filtered = filtered.replace(/\s{2,}/g, " ");
   // If the result is very short and mostly noise, return empty.

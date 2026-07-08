@@ -369,7 +369,7 @@ pub fn deactivate_window_after_file_picker<R: Runtime>(
 pub fn set_app_icon_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        use tauri_nspanel::objc::msg_send;
+        use tauri_nspanel::objc::{class, msg_send};
         use tauri_nspanel::objc::runtime::Object;
 
         let shared_app: *mut Object = unsafe { msg_send![class!(NSApplication), sharedApplication] };

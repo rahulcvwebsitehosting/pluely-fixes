@@ -8,8 +8,7 @@ interface MarkdownRendererProps {
   isStreaming?: boolean;
 }
 
-const THINK_TAG_RE = /^(\s*)(<think>)([\s\S]*?)(<\/think>)(\s*)$/im;
-const THINK_TAG_RE_GLOBAL = /<think>([\s\S]*?)<\/think>/g;
+const THINK_TAG_RE_GLOBAL = / thinking([\s\S]*?)<\/think>/g;
 
 export function Markdown({
   children,
@@ -43,8 +42,6 @@ export function Markdown({
 }
 
 function renderThinkTags(text: string): string {
-  if (!THINK_TAG_RE.test(text)) return text;
-
   return text.replace(THINK_TAG_RE_GLOBAL, (_match, content) => {
     const label = "Reasoning";
     return `\n\n<details class="think-block">\n<summary>${label}</summary>\n\n${content.trim()}\n\n</details>\n\n`;

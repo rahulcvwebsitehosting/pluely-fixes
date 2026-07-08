@@ -35,6 +35,7 @@ export const ChatFiles = ({
 }: ChatFilesProps) => {
   const { supportsImages } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const deactivateTimerRef = useRef<number | null>(null);
   const platform = getPlatform();
 
   const openFilePicker = useCallback(async () => {
@@ -45,7 +46,11 @@ export const ChatFiles = ({
     }
     fileInputRef.current?.click();
     if (platform === "macos") {
-      setTimeout(async () => {
+      if (deactivateTimerRef.current !== null) {
+        clearTimeout(deactivateTimerRef.current);
+      }
+      deactivateTimerRef.current = window.setTimeout(async () => {
+        deactivateTimerRef.current = null;
         try {
           await invoke("deactivate_window_after_file_picker");
         } catch {}
@@ -190,6 +195,10 @@ export const ChatFiles = ({
         accept="image/*"
         onChange={async (e) => {
           if (platform === "macos") {
+            if (deactivateTimerRef.current !== null) {
+              clearTimeout(deactivateTimerRef.current);
+              deactivateTimerRef.current = null;
+            }
             try {
               await invoke("deactivate_window_after_file_picker");
             } catch {}
