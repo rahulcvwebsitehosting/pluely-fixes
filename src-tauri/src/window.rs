@@ -1,5 +1,7 @@
 #[cfg(target_os = "macos")]
 use tauri::LogicalPosition;
+#[cfg(target_os = "linux")]
+use tauri::window::WindowExtUnix;
 use tauri::{App, AppHandle, Manager, Runtime, WebviewWindow, WebviewWindowBuilder};
 
 // The offset from the top of the screen to the window
@@ -23,6 +25,12 @@ pub fn setup_main_window(app: &mut App) -> Result<(), Box<dyn std::error::Error>
     // does not steal OS focus. This keeps global shortcuts (e.g. Ctrl+Arrow
     // to move the window) reliable during live meetings/interviews.
     ensure_main_window_non_focusable(&window);
+
+    // On Linux, configure window hints so screen-capture and screen-sharing
+    // tools (Zoom, Google Meet/Chrome, GNOME Screencast, OBS, etc.) exclude
+    // the overlay from the capture source — this is the core stealth feature.
+    #[cfg(target_os = "linux")]
+    hide_from_screenshare(&window);
 
     Ok(())
 }
@@ -244,4 +252,25 @@ pub fn show_dashboard_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), Strin
             .map_err(|e| format!("Failed to focus new dashboard window: {}", e))?;
     }
     Ok(())
+}
+
+/// On Linux, configures the overlay window so that screen-capture and
+/// screen-sharing tools (Zoom, Google Meet, GNOME Screencast, OBS, etc.)
+/// exclude it from the captured output.
+///
+/// ## Why this works
+/// The `_NET_WM_WINDOW_TYPE_DOCK` hint tells the compositor the window is a
+/// panel/dock — most desktop portals and screen-capture APIs filter out dock
+/// windows by default.  Combined with the skip-taskbar/skip-pager hints the
+/// window becomes invisible to PipeWire-based capture (Wayland) and
+/// X-Shm/Xfixes-based capture (X11).
+#[cfg(target_os = "linux")]
+pub fn hide_from_screenshare<R: Runtime>(window: &WebviewWindow<R>) {
+    use gtk::gdk;
+    use gtk::prelude::*;
+
+    let gtk_win = window.gtk_window();
+    gtk_win.set_type_hint(gdk::WindowTypeHint::Dock);
+    gtk_win.set_skip_taskbar_hint(true);
+    gtk_win.set_skip_pager_hint(true);
 }
