@@ -172,7 +172,7 @@ pub fn run() {
 
                                 registered.iter().find_map(|(action_id, shortcut_str)| {
                                     if let Ok(s) = shortcut_str.parse::<Shortcut>() {
-                                        if &s == shortcut {
+                                        if shortcuts::shortcuts_equal(&s, shortcut) {
                                             return Some(action_id.clone());
                                         }
                                     }

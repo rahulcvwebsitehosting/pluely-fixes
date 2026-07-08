@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, Key};
 use tokio::time::{sleep, Duration};
 
 #[cfg(target_os = "macos")]
@@ -146,6 +146,53 @@ pub fn setup_global_shortcuts<R: Runtime>(
     Ok(())
 }
 
+/// Compares two `Shortcut` values for equality, handling `Key` variant mismatches
+/// that arise in Tauri 2 between parsed config strings (`Key::Character("d")`)
+/// and native events (`Key::Character("D")` or `Key::Named(NamedKey::KeyD)`).
+pub fn shortcuts_equal(a: &Shortcut, b: &Shortcut) -> bool {
+    a.modifiers == b.modifiers && keys_equal(&a.key, &b.key)
+}
+
+fn keys_equal(a: &Key, b: &Key) -> bool {
+    if a == b {
+        return true; // identical variant and value
+    }
+    normalize_key(a) == normalize_key(b)
+}
+
+/// Normalises a `Key` to a case-insensitive canonical string so that
+/// `Character("d")`, `Character("D")` and `Named(KeyD)` all yield `"d"`.
+fn normalize_key(key: &Key) -> String {
+    match key {
+        Key::Character(ch) => ch.to_lowercase(),
+        Key::Named(named) => {
+            let raw = format!("{:?}", named); // e.g. "KeyD", "Digit1", "Backslash"
+            let lower = raw.to_lowercase();
+            if let Some(rest) = lower.strip_prefix("key") {
+                rest.to_string()   // "keyd" → "d"
+            } else if let Some(rest) = lower.strip_prefix("digit") {
+                rest.to_string()   // "digit1" → "1"
+            } else {
+                match lower.as_str() {
+                    "backslash" | "intlbackslash" => "\\".into(),
+                    "slash"                       => "/".into(),
+                    "comma"                       => ",".into(),
+                    "period"                      => ".".into(),
+                    "semicolon"                   => ";".into(),
+                    "quote"                       => "'".into(),
+                    "bracketleft"                 => "[".into(),
+                    "bracketright"                => "]".into(),
+                    "backquote"                   => "`".into(),
+                    "minus"                       => "-".into(),
+                    "equal"                       => "=".into(),
+                    "space"                       => " ".into(),
+                    other                         => other.into(),
+                }
+            }
+        }
+    }
+}
+
 /// Handle shortcut action based on action_id
 pub fn handle_shortcut_action<R: Runtime>(app: &AppHandle<R>, action_id: &str) {
     match action_id {
@@ -245,7 +292,13 @@ fn handle_toggle_window<R: Runtime>(app: &AppHandle<R>) {
     #[cfg(target_os = "windows")]
     {
         let state = app.state::<WindowVisibility>();
-        let mut is_hidden = state.is_hidden.lock().unwrap();
+        let mut is_hidden = match state.is_hidden.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("Mutex poisoned in handle_toggle_window, recovering...");
+                poisoned.into_inner()
+            }
+        };
         // Toggle the hidden state and apply it without stealing OS focus.
         let new_hidden = !*is_hidden;
 
@@ -476,21 +529,19 @@ pub fn update_shortcuts<R: Runtime>(
     }
 
     if !registration_failures.is_empty() {
+        eprintln!(
+            "[pluely] {} shortcut(s) failed to register",
+            registration_failures.len()
+        );
+        for (action, key, err) in &registration_failures {
+            eprintln!("  {action} ({key}): {err}");
+        }
+
         if let Some(window) = app.get_webview_window("main") {
             if let Err(e) = window.emit("shortcut-registration-error", &registration_failures) {
                 eprintln!("Failed to emit shortcut registration error event: {}", e);
             }
         }
-
-        let error_messages: Vec<String> = registration_failures
-            .into_iter()
-            .map(|(action, key, error)| format!("{} ({}) - {}", action, key, error))
-            .collect();
-
-        return Err(format!(
-            "Some shortcuts could not be registered: {}",
-            error_messages.join("; ")
-        ));
     }
 
     // macOS silently disables the CGEventTap after ~30 minutes of inactivity,
