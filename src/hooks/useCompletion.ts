@@ -776,7 +776,9 @@ export const useCompletion = () => {
     isFilesPopoverOpen,
   ]);
 
-  // Auto scroll to bottom when response updates
+  // Auto scroll to bottom when response updates, but only if the user is
+  // already near the bottom (within 150 px).  If they scrolled up to read
+  // earlier history, do not yank them back down.
   useEffect(() => {
     const responseSettings = getResponseSettings();
     if (
@@ -787,13 +789,20 @@ export const useCompletion = () => {
     ) {
       const scrollElement = scrollAreaRef.current.querySelector(
         "[data-radix-scroll-area-viewport]"
-      );
-      if (scrollElement) {
-        scrollElement.scrollTo({
-          top: scrollElement.scrollHeight,
-          behavior: "smooth",
-        });
-      }
+      ) as HTMLElement | null;
+      if (!scrollElement) return;
+
+      const threshold = 150;
+      const distanceFromBottom =
+        scrollElement.scrollHeight -
+        scrollElement.scrollTop -
+        scrollElement.clientHeight;
+      if (distanceFromBottom > threshold) return;
+
+      scrollElement.scrollTo({
+        top: scrollElement.scrollHeight,
+        behavior: "smooth",
+      });
     }
   }, [state.response, keepEngaged]);
 

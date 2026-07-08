@@ -1,4 +1,4 @@
-import { Card, Updater, DragButton, CustomCursor, Button } from "@/components";
+import { Card, Updater, DragButton, CustomCursor, Button, ModelSelector } from "@/components";
 import {
   SystemAudio,
   Completion,
@@ -86,6 +86,7 @@ const App = () => {
             }`}
           >
             <Completion isHidden={isHidden} />
+            <ModelSelector />
             <Button
               size={"icon"}
               className="cursor-pointer"

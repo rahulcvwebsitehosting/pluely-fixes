@@ -77,8 +77,10 @@ pub fn run() {
     let mut builder = builder
         .invoke_handler(tauri::generate_handler![
             get_app_version,
+            window::set_window_size,
             window::set_window_height,
             window::reset_focusable,
+            window::set_app_icon_path,
             window::activate_window_for_file_picker,
             window::deactivate_window_after_file_picker,
             window::open_dashboard,

@@ -235,3 +235,29 @@ export function getStreamingContent(
   // Return null if no content is found after trying all paths.
   return null;
 }
+
+// Default filler words stripped from transcriptions before sending to the AI.
+// Users can override the list via localStorage (STORAGE_KEYS.FILTER_WORDS).
+const DEFAULT_FILLER_WORDS = [
+  "uh", "um", "uhh", "umm", "ah", "er", "hmm",
+  "like", "you know", "i mean", "sort of", "kind of",
+  "actually", "basically", "literally", "honestly",
+  "so yeah", "yeah", "okay", "alright", "well",
+];
+
+const FILLER_RE = new RegExp(
+  `(?:^|\\s)(?:${DEFAULT_FILLER_WORDS.map((w) =>
+    w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  ).join("|")})(?=\\s|$|\\.|,|\\?|!|;|:)`,
+  "gi"
+);
+
+/** Strips common filler words from a transcription string. */
+export function filterTranscription(text: string): string {
+  let filtered = text.replace(FILLER_RE, "").trim();
+  // Collapse repeated whitespace left behind after removals.
+  filtered = filtered.replace(/\s{2,}/g, " ");
+  // If the result is very short and mostly noise, return empty.
+  if (filtered.length < 3) return "";
+  return filtered;
+}

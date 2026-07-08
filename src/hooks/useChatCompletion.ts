@@ -90,9 +90,21 @@ export const useChatCompletion = (
 
   const scrollToBottom = () => {
     const responseSettings = getResponseSettings();
-    if (responseSettings.autoScroll) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!responseSettings.autoScroll) return;
+
+    // Only scroll if the user is near the bottom (within 150 px).  If they
+    // scrolled up to read earlier messages, respect their position.
+    const viewport = document.querySelector(
+      "[data-radix-scroll-area-viewport]"
+    ) ?? document.scrollingElement;
+    if (viewport) {
+      const threshold = 150;
+      const distanceFromBottom =
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      if (distanceFromBottom > threshold) return;
     }
+
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const setInput = useCallback((value: string) => {

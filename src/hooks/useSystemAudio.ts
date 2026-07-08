@@ -3,7 +3,7 @@ import { useWindowResize, useGlobalShortcuts } from ".";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useApp } from "@/contexts";
-import { fetchSTT, fetchAIResponse } from "@/lib/functions";
+import { fetchSTT, fetchAIResponse, filterTranscription } from "@/lib/functions";
 import {
   DEFAULT_QUICK_ACTIONS,
   DEFAULT_SYSTEM_PROMPT,
@@ -272,8 +272,12 @@ export function useSystemAudio() {
                 timeoutPromise,
               ]);
 
-              if (transcription.trim()) {
-                setLastTranscription(transcription);
+              // Strip filler words ("uh", "um", "like", etc.) so the AI
+              // receives only meaningful content.
+              const cleaned = filterTranscription(transcription.trim());
+
+              if (cleaned) {
+                setLastTranscription(cleaned);
                 setError("");
 
                 const effectiveSystemPrompt = useSystemPrompt
@@ -285,7 +289,7 @@ export function useSystemAudio() {
                 });
 
                 await processWithAI(
-                  transcription,
+                  cleaned,
                   effectiveSystemPrompt,
                   previousMessages
                 );

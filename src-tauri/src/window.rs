@@ -165,11 +165,26 @@ pub fn center_window_completely(window: &WebviewWindow) -> Result<(), Box<dyn st
 }
 
 #[tauri::command]
+pub fn set_window_size(
+    window: tauri::WebviewWindow,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    use tauri::{LogicalSize, Size};
+
+    let new_size = LogicalSize::new(width as f64, height as f64);
+    window
+        .set_size(Size::Logical(new_size))
+        .map_err(|e| format!("Failed to resize window: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn set_window_height(window: tauri::WebviewWindow, height: u32) -> Result<(), String> {
     use tauri::{LogicalSize, Size};
 
-    // Simply set the window size with fixed width and new height
-    let new_size = LogicalSize::new(600.0, height as f64);
+    let new_size = LogicalSize::new(800.0, height as f64);
     window
         .set_size(Size::Logical(new_size))
         .map_err(|e| format!("Failed to resize window: {}", e))?;
@@ -342,6 +357,105 @@ pub fn deactivate_window_after_file_picker<R: Runtime>(
     {
         window.set_focusable(false).map_err(|e| e.to_string())?;
     }
+    Ok(())
+}
+
+/// Replaces the app icon at runtime from a PNG file path.
+///
+/// On macOS this sets `NSApplication.sharedApplication.applicationIconImage`.
+/// On Windows it sets the window class icon via `WM_SETICON`.
+/// On Linux this is a no-op (icons are set at the `.desktop` level).
+#[tauri::command]
+pub fn set_app_icon_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri_nspanel::objc::msg_send;
+        use tauri_nspanel::objc::runtime::Object;
+
+        let shared_app: *mut Object = unsafe { msg_send![class!(NSApplication), sharedApplication] };
+
+        if path.is_empty() {
+            let _: () = unsafe { msg_send![shared_app, setApplicationIconImage: std::ptr::null_mut::<Object>()] };
+            return Ok(());
+        }
+
+        let ns_str: *mut Object = unsafe {
+            msg_send![class!(NSString), stringWithUTF8String: path.as_ptr() as *const i8]
+        };
+        let data: *mut Object = unsafe { msg_send![class!(NSData), dataWithContentsOfFile: ns_str] };
+        if data.is_null() {
+            return Err("Failed to read icon file".into());
+        }
+        let img: *mut Object = unsafe { msg_send![class!(NSImage), alloc] };
+        let img: *mut Object = unsafe { msg_send![img, initWithData: data] };
+        let _: () = unsafe { msg_send![shared_app, setApplicationIconImage: img] };
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::ffi::CString;
+        use std::ptr;
+        use tauri::raw_window_handle::HasRawWindowHandle;
+
+        let main = app.get_webview_window("main");
+        let hwnd = match main.and_then(|w| w.raw_window_handle().ok()) {
+            Some(tauri::raw_window_handle::RawWindowHandle::Win32(win)) => win.hwnd.as_ptr(),
+            _ => return Err("No main window found".into()),
+        };
+
+        extern "system" {
+            fn LoadImageA(
+                hInst: *mut std::ffi::c_void,
+                name: *const u8,
+                typ: u32,
+                cx: i32,
+                cy: i32,
+                fuLoad: u32,
+            ) -> *mut std::ffi::c_void;
+            fn SendMessageA(
+                hWnd: *mut std::ffi::c_void,
+                msg: u32,
+                wParam: usize,
+                lParam: isize,
+            ) -> isize;
+            fn DestroyIcon(hIcon: *mut std::ffi::c_void) -> i32;
+        }
+
+        const IMAGE_ICON: u32 = 1;
+        const LR_LOADFROMFILE: u32 = 0x00000010;
+        const LR_DEFAULTSIZE: u32 = 0x00000040;
+        const WM_SETICON: u32 = 0x0080;
+        const ICON_SMALL: usize = 0;
+        const ICON_BIG: usize = 1;
+
+        if path.is_empty() {
+            return Ok(());
+        }
+
+        let cpath = CString::new(path.as_str()).map_err(|e| e.to_string())?;
+        unsafe {
+            let hIcon = LoadImageA(
+                ptr::null_mut(),
+                cpath.as_ptr(),
+                IMAGE_ICON,
+                0,
+                0,
+                LR_LOADFROMFILE | LR_DEFAULTSIZE,
+            );
+            if hIcon.is_null() {
+                return Err("Failed to load icon file".into());
+            }
+            SendMessageA(hwnd, WM_SETICON, ICON_SMALL, hIcon as isize);
+            SendMessageA(hwnd, WM_SETICON, ICON_BIG, hIcon as isize);
+            DestroyIcon(hIcon);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let _ = (app, path);
+    }
+
     Ok(())
 }
 
