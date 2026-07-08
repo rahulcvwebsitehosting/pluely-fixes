@@ -1,4 +1,6 @@
-import { useRef } from "react";
+import { useRef, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { getPlatform } from "@/lib";
 import {
   Popover,
   PopoverContent,
@@ -33,9 +35,26 @@ export const ChatFiles = ({
 }: ChatFilesProps) => {
   const { supportsImages } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const platform = getPlatform();
+
+  const openFilePicker = useCallback(async () => {
+    if (platform === "macos") {
+      try {
+        await invoke("activate_window_for_file_picker");
+      } catch {}
+    }
+    fileInputRef.current?.click();
+    if (platform === "macos") {
+      setTimeout(async () => {
+        try {
+          await invoke("deactivate_window_after_file_picker");
+        } catch {}
+      }, 500);
+    }
+  }, [platform]);
 
   const handleAddMoreClick = () => {
-    fileInputRef.current?.click();
+    openFilePicker();
   };
 
   const canAddMore = attachedFiles.length < MAX_FILES;
@@ -169,7 +188,14 @@ export const ChatFiles = ({
         type="file"
         multiple
         accept="image/*"
-        onChange={handleFileSelect}
+        onChange={async (e) => {
+          if (platform === "macos") {
+            try {
+              await invoke("deactivate_window_after_file_picker");
+            } catch {}
+          }
+          handleFileSelect(e);
+        }}
         // NOTE: Must remain in the render tree (not `display:none`). WKWebView on
         // macOS ignores `.click()` on a `display:none` file input. Offscreen
         // positioning keeps it clickable.

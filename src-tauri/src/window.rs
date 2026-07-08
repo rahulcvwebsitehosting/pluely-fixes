@@ -46,6 +46,16 @@ pub fn ensure_main_window_non_focusable<R: Runtime>(window: &WebviewWindow<R>) {
 #[cfg(not(target_os = "windows"))]
 pub fn ensure_main_window_non_focusable<R: Runtime>(_window: &WebviewWindow<R>) {}
 
+/// On Windows: re-asserts the non-focusable (`WS_EX_NOACTIVATE`) state after any
+/// user interaction (click, keypress, drag) so the overlay never steals focus
+/// from fullscreen apps (browsers, proctoring, meetings).
+#[tauri::command]
+pub fn reset_focusable<R: Runtime>(window: tauri::WebviewWindow<R>) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    ensure_main_window_non_focusable(&window);
+    Ok(())
+}
+
 /// Shows the main overlay without requesting OS focus.
 ///
 /// On Windows this uses `ShowWindow(SW_SHOWNOACTIVATE)` instead of Tauri's
@@ -303,6 +313,34 @@ pub fn show_dashboard_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), Strin
         window
             .set_focus()
             .map_err(|e| format!("Failed to focus new dashboard window: {}", e))?;
+    }
+    Ok(())
+}
+
+/// On macOS: temporarily activates the panel so WKWebView will show the native
+/// file-picker dialog.  Non-activating panels cannot open modal sheets/dialogs
+/// (the file picker simply fails silently), so we briefly make the panel key.
+#[tauri::command]
+pub fn activate_window_for_file_picker<R: Runtime>(
+    window: tauri::WebviewWindow<R>,
+) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        window.set_focusable(true).map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Restores the non-focusable state after the file picker dialog has closed.
+/// Must be paired with `activate_window_for_file_picker`.
+#[tauri::command]
+pub fn deactivate_window_after_file_picker<R: Runtime>(
+    window: tauri::WebviewWindow<R>,
+) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        window.set_focusable(false).map_err(|e| e.to_string())?;
     }
     Ok(())
 }

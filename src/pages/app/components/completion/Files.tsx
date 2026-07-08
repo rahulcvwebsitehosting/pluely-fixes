@@ -1,4 +1,6 @@
-import { useRef } from "react";
+import { useRef, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { getPlatform } from "@/lib";
 import {
   Popover,
   PopoverContent,
@@ -21,9 +23,31 @@ export const Files = ({
 }: UseCompletionReturn) => {
   const { supportsImages } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const platform = getPlatform();
+
+  const openFilePicker = useCallback(async () => {
+    // macOS: non-activating panel prevents WKWebView from showing the native
+    // file-picker dialog.  Briefly activate the window before the click.
+    if (platform === "macos") {
+      try {
+        await invoke("activate_window_for_file_picker");
+      } catch {}
+    }
+    fileInputRef.current?.click();
+    // Deactivate after a short delay (covers the cancel path where onChange
+    // never fires).  The onChange handler also calls deactivate immediately
+    // on selection, so the delay is just a cancel-timeout fallback.
+    if (platform === "macos") {
+      setTimeout(async () => {
+        try {
+          await invoke("deactivate_window_after_file_picker");
+        } catch {}
+      }, 500);
+    }
+  }, [platform]);
 
   const handleAddMoreClick = () => {
-    fileInputRef.current?.click();
+    openFilePicker();
   };
 
   const canAddMore = attachedFiles.length < MAX_FILES;
@@ -156,7 +180,15 @@ export const Files = ({
         type="file"
         multiple
         accept="image/*"
-        onChange={handleFileSelect}
+        onChange={async (e) => {
+          // macOS: restore non-focusable state immediately on selection
+          if (platform === "macos") {
+            try {
+              await invoke("deactivate_window_after_file_picker");
+            } catch {}
+          }
+          handleFileSelect(e);
+        }}
         // NOTE: Must remain in the render tree (not `display:none`). WKWebView on
         // macOS ignores `.click()` on a `display:none` file input, which made the
         // paperclip unresponsive. Offscreen positioning keeps it clickable.

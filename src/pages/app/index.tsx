@@ -7,6 +7,7 @@ import {
 } from "./components";
 import { useApp } from "@/hooks";
 import { useApp as useAppContext } from "@/contexts";
+import { useEffect } from "react";
 import { SparklesIcon } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { ErrorBoundary } from "react-error-boundary";
@@ -25,6 +26,23 @@ const App = () => {
       console.error("Failed to open dashboard:", error);
     }
   };
+
+  // Re-assert the non-focusable state after every user interaction (click,
+  // keypress, drag) so the overlay never steals focus from fullscreen apps.
+  // Pair of `WS_EX_NOACTIVATE` + `SW_SHOWNOACTIVATE` is not enough because
+  // WebView2 child-window focus changes can still activate the parent.
+  const handleInteraction = () => {
+    invoke("reset_focusable").catch(() => {});
+  };
+
+  useEffect(() => {
+    document.addEventListener("click", handleInteraction, true);
+    document.addEventListener("keydown", handleInteraction, true);
+    return () => {
+      document.removeEventListener("click", handleInteraction, true);
+      document.removeEventListener("keydown", handleInteraction, true);
+    };
+  }, []);
 
   return (
     <ErrorBoundary

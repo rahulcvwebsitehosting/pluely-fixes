@@ -78,6 +78,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_app_version,
             window::set_window_height,
+            window::reset_focusable,
+            window::activate_window_for_file_picker,
+            window::deactivate_window_after_file_picker,
             window::open_dashboard,
             window::toggle_dashboard,
             window::move_window,
