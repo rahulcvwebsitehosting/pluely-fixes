@@ -134,7 +134,6 @@ export const AI_PROVIDERS = [
   {
     id: "ollama",
     curl: `curl -X POST http://localhost:11434/v1/chat/completions \\
-    -H "Authorization: Bearer {{API_KEY}}" \\
     -H "Content-Type: application/json" \\
     -d '{
     "model": "{{MODEL}}",

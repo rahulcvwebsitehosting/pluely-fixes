@@ -48,9 +48,13 @@ export function ModelSelector() {
               <button
                 key={p.id}
                 onClick={() => {
+                  // Reset variables when switching providers — different
+                  // providers have different required variables (e.g. api_key,
+                  // model, project_id).  Carrying old values over silently
+                  // breaks the new provider when fields don't match.
                   onSetSelectedAIProvider({
                     provider: p.id!,
-                    variables: selectedAIProvider.variables,
+                    variables: {},
                   });
                   setOpen(false);
                 }}

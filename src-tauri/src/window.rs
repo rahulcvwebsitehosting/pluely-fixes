@@ -32,6 +32,12 @@ pub fn setup_main_window(app: &mut App) -> Result<(), Box<dyn std::error::Error>
     #[cfg(target_os = "linux")]
     hide_from_screenshare(&window);
 
+    // Show the window after positioning — tauri.conf.json now has
+    // visible:false to avoid a flash-of-misposition at startup.
+    if let Err(e) = show_main_window_without_focus(&window) {
+        eprintln!("[pluely] Failed to show window after setup: {}", e);
+    }
+
     Ok(())
 }
 
